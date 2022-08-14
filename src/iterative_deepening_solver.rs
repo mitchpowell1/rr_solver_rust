@@ -211,17 +211,14 @@ impl IterativeDeepeningSolver {
         }
     }
 
-    pub fn solve(&mut self) -> bool {
+    pub fn solve(&mut self) -> Vec<(usize, usize)> {
         let mut previous_states: HashMap<u32, u8> = HashMap::new();
-        fn helper(depth: u8, max_depth: u8, solver: &mut IterativeDeepeningSolver,  prev_states: &mut HashMap<u32, u8>) -> bool {
+        let mut solution: Vec<(usize, usize)> = Vec::new();
+        fn helper(depth: u8, max_depth: u8, solver: &mut IterativeDeepeningSolver,  prev_states: &mut HashMap<u32, u8>, solution: &mut Vec<(usize, usize)>) -> bool {
             let clearance = max_depth - depth;
             prev_states.insert(solver.create_hash(), clearance);
             if solver.is_solved() {
-                println!("Found solution at depth {:?}", depth);
                 return true;
-            }
-            if depth == max_depth {
-                return false;
             }
 
             for bot_index in 0..util::BOT_COUNT {
@@ -238,9 +235,9 @@ impl IterativeDeepeningSolver {
                         solver.undo_move(bot_move);
                         continue;
                     }
-                    let res = helper(depth + 1, max_depth, solver, prev_states);
+                    let res = helper(depth + 1, max_depth, solver, prev_states, solution);
                     if res {
-                        println!("{:?}", solver.bots);
+                        solution.push(bot_move);
                         solver.undo_move(bot_move);
                         return true
                     }
@@ -252,11 +249,11 @@ impl IterativeDeepeningSolver {
         let mut max_depth = self.min_costs[self.bots[0]];
         let mut res = false;
         while !res {
-            res = helper(0, max_depth, self, &mut previous_states);
+            res = helper(0, max_depth, self, &mut previous_states, &mut solution);
             max_depth += 1;
         }
-        println!("{:?}", self.bots);
-        return res;
+        solution.reverse();
+        return solution;
     }
 }
 
@@ -264,13 +261,6 @@ impl IterativeDeepeningSolver {
 mod solver_tests {
     use super::*;
     use crate::util::BOT_COUNT;
-
-    #[test]
-    fn solve() {
-        let mut solver = IterativeDeepeningSolver::new();
-        assert!(solver.solve());
-        assert_eq!(solver.board.len(), 256);
-    }
 
     #[test]
     fn find_boundary_square() {
@@ -408,27 +398,30 @@ mod solver_tests {
 
     #[test]
     fn solves_correctly() {
-        // let raw_board: [u8; util::BOARD_SIZE] = [
-        //     09, 01, 05, 01, 03, 09, 01, 01, 01, 03, 09, 01, 01, 01, 01, 03, 
-        //     08, 02, 09, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 06, 08, 06, 
-        //     08, 00, 00, 00, 00, 00, 00, 00, 00, 04, 00, 00, 00, 01, 00, 03,
-        //     08, 00, 00, 00, 00, 02, 12, 00, 02, 09, 00, 00, 00, 00, 04, 02,
-        //     12, 00, 00, 00, 04, 00, 01, 00, 00, 00, 00, 00, 00, 00, 03, 10,
-        //     09, 00, 00, 00, 03, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02,
-        //     08, 06, 08, 00, 00, 00, 00, 04, 04, 00, 00, 02, 12, 00, 00, 02, 
-        //     08, 01, 00, 00, 00, 00, 02, 09, 03, 08, 00, 00, 01, 00, 00, 02, 
-        //     08, 00, 04, 00, 02, 12, 02, 12, 06, 08, 00, 00, 00, 00, 00, 06, 
-        //     08, 18, 09, 00, 00, 01, 00, 01, 01, 00, 00, 00, 00, 04, 00, 03, 
-        //     08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 09, 00, 02, 
-        //     28, 00, 00, 00, 00, 00, 00, 00, 00, 00, 06, 08, 00, 00, 00, 02, 
-        //     09, 00, 00, 00, 04, 00, 00, 00, 00, 00, 01, 00, 00, 02, 12, 02, 
-        //     08, 00, 00, 16, 03, 08, 00, 00, 00, 04, 00, 00, 00, 00, 01, 02,
-        //     08, 06, 08, 00, 00, 00, 00, 00, 00, 03, 08, 00, 00, 00, 16, 02, 
-        //     12, 05, 04, 04, 04, 06, 12, 04, 04, 04, 04, 06, 12, 04, 04, 06,
-        // ];
-        let raw_board = [9, 1, 1, 1, 3, 9, 1, 1, 1, 3, 9, 1, 1, 1, 5, 3, 8, 0, 22, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 9, 2, 8, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 28, 0, 0, 0, 2, 26, 12, 0, 0, 0, 0, 4, 0, 0, 0, 0, 1, 0, 0, 0, 6, 12, 1, 0, 0, 0, 2, 9, 0, 0, 0, 0, 0, 0, 0, 0, 3, 9, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 3, 8, 4, 4, 0, 4, 0, 0, 6, 8, 2, 8, 0, 0, 0, 0, 0, 2, 9, 3, 8, 3, 8, 0, 1, 0, 2, 8, 0, 0, 4, 0, 0, 2, 12, 6, 8, 0, 0, 0, 0, 4, 2, 8, 0, 0, 3, 8, 0, 0, 1, 1, 0, 0, 0, 0, 2, 9, 2, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 12, 0, 0, 0, 6, 10, 12, 0, 0, 0, 0, 0, 0, 0, 4, 0, 1, 0, 0, 0, 3, 8, 1, 0, 0, 0, 0, 6, 8, 0, 3, 8, 0, 0, 0, 0, 2, 12, 0, 4, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 2, 9, 2, 25, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 8, 2, 12, 4, 4, 4, 4, 6, 12, 4, 4, 4, 6, 12, 4, 5, 4, 6];
+        let raw_board = [
+            09, 01, 01, 01, 03, 09, 01, 01, 01, 03, 09, 01, 01, 01, 05, 03, 
+            08, 00, 06, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 09, 02, 
+            08, 00, 01, 00, 00, 00, 00, 00, 00, 00, 02, 12, 00, 00, 00, 02, 
+            10, 12, 00, 00, 00, 00, 04, 00, 00, 00, 00, 01, 00, 00, 00, 06, 
+            12, 01, 00, 00, 00, 02, 09, 00, 00, 00, 00, 00, 00, 00, 00, 03, 
+            09, 00, 00, 00, 00, 04, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02,
+            08, 00, 00, 00, 00, 03, 08, 04, 04, 00, 04, 00, 00, 06, 08, 02,
+            08, 00, 00, 00, 00, 00, 02, 09, 03, 08, 03, 08, 00, 01, 00, 02,
+            08, 00, 00, 04, 00, 00, 02, 12, 06, 08, 00, 00, 00, 00, 04, 02,
+            08, 00, 00, 03, 08, 00, 00, 01, 01, 00, 00, 00, 00, 02, 09, 02,
+            08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 12, 00, 00, 00, 06,
+            10, 12, 00, 00, 00, 00, 00, 00, 00, 04, 00, 01, 00, 00, 00, 03,
+            08, 01, 00, 00, 00, 00, 06, 08, 00, 03, 08, 00, 00, 00, 00, 02,
+            12, 00, 04, 00, 00, 00, 01, 00, 00, 00, 00, 00, 00, 00, 00, 02,
+            09, 02, 09, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 06, 08, 02,
+            12, 04, 04, 04, 04, 06, 12, 04, 04, 04, 06, 12, 04, 05, 04, 06,
+        ];
         let board = raw_board.map(|x|{ return SquareFlags::from_bits(x).unwrap() });
-        let mut solver = IterativeDeepeningSolver::with_values(board,[43, 226, 48, 18], 201);
-        solver.solve();
+        // 25 move bot position: [43, 226, 48, 18]
+        // Changed to make running the test tractable
+        let mut solver = IterativeDeepeningSolver::with_values(board,[191, 226, 177, 64], 201);
+        let solution = solver.solve();
+        assert_eq!(solution.len(), 10);
+        assert_eq!(solution.last().unwrap().1, 201);
     }
 }
