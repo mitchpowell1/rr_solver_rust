@@ -1,13 +1,12 @@
 use crate::util;
-use crate::util::BOARD_SIZE;
 
 use util::SquareFlags;
 use util::BOARD_COLS;
-use util::BOARD_ROWS;
 
 use fnv::FnvHashMap;
 
 
+#[derive(Copy, Clone, PartialEq)]
 enum Direction {
     North = 0,
     South = 1,
@@ -17,6 +16,24 @@ enum Direction {
 
 impl Direction {
     const VALUES: [Direction; 4] = [Direction::North, Direction::South, Direction::East, Direction::West];
+
+    fn get_offset(&self) -> i32 {
+        match self {
+            Direction::North => -(BOARD_COLS as i32),
+            Direction::South => BOARD_COLS as i32,
+            Direction::East => 1,
+            Direction::West => -1,
+        }
+    }
+
+    fn get_wall(&self) -> SquareFlags {
+        match self {
+            Direction::North => SquareFlags::WALL_NORTH,
+            Direction::South => SquareFlags::WALL_SOUTH,
+            Direction::East => SquareFlags::WALL_EAST,
+            Direction::West => SquareFlags::WALL_WEST,
+        }
+    }
 }
 
 
@@ -72,51 +89,17 @@ impl IterativeDeepeningSolver {
  */
 impl IterativeDeepeningSolver {
     fn find_boundary_square(&self, start_square: usize, direction: Direction) -> usize {
-        let mut square = start_square;
-        match direction {
-            Direction::North => {
-                while square >= BOARD_COLS && !self.board[square].contains(SquareFlags::WALL_NORTH)
-                {
-                    square -= BOARD_COLS;
-                    if self.board[square].contains(SquareFlags::OCCUPIED) {
-                        square += BOARD_COLS;
-                        break;
-                    }
-                }
-            }
-            Direction::South => {
-                while square < BOARD_SIZE - BOARD_COLS
-                    && !self.board[square].contains(SquareFlags::WALL_SOUTH)
-                {
-                    square += BOARD_COLS;
-                    if self.board[square].contains(SquareFlags::OCCUPIED) {
-                        square -= BOARD_COLS;
-                        break;
-                    }
-                }
-            }
-            Direction::East => {
-                let row_bound = ((start_square / BOARD_ROWS) * BOARD_COLS) + BOARD_COLS - 1;
-                while square < row_bound && !self.board[square].contains(SquareFlags::WALL_EAST) {
-                    square += 1;
-                    if self.board[square].contains(SquareFlags::OCCUPIED) {
-                        square -= 1;
-                        break;
-                    }
-                }
-            }
-            Direction::West => {
-                let row_bound = (start_square / BOARD_ROWS) * BOARD_COLS;
-                while square > row_bound && !self.board[square].contains(SquareFlags::WALL_WEST) {
-                    square -= 1;
-                    if self.board[square].contains(SquareFlags::OCCUPIED) {
-                        square += 1;
-                        break;
-                    }
-                }
+        let mut square = start_square as i32;
+        let offset = direction.get_offset();
+        let wall = direction.get_wall();
+        while !self.board[square as usize].contains(wall) {
+            square += offset;
+            if self.board[square as usize].contains(SquareFlags::OCCUPIED) {
+                square -= offset;
+                break;
             }
         }
-        square
+        square as usize
     }
 
     fn compute_min_moves(&mut self) {
@@ -179,6 +162,19 @@ impl IterativeDeepeningSolver {
         }
     }
 
+    fn can_move (&self, bot: usize, direction: Direction) -> bool {
+        let square = self.board[bot];
+        if square.contains(direction.get_wall()) {
+            return false;
+        }
+        let next_square = (bot as i32 + direction.get_offset()) as usize;
+        if self.board[next_square].contains(SquareFlags::OCCUPIED) {
+            return false;
+        }
+
+        true
+    }
+
     fn move_bot(&mut self, index: usize, direction: Direction) -> (usize, usize) {
         let original = self.bots[index];
         let boundary_square = self.find_boundary_square(self.bots[index], direction);
@@ -227,6 +223,9 @@ impl IterativeDeepeningSolver {
 
             for bot_index in 0..util::BOT_COUNT {
                 for direction in Direction::VALUES {
+                    if !solver.can_move(solver.bots[bot_index], direction) {
+                        continue;
+                    }
                     let bot_move = solver.move_bot(bot_index, direction);
                     let hash = solver.create_hash();
                     if let Some(&x) = prev_states.get(&hash) {
@@ -264,141 +263,6 @@ impl IterativeDeepeningSolver {
 #[cfg(test)]
 mod solver_tests {
     use super::*;
-    use crate::util::BOT_COUNT;
-
-    #[test]
-    fn find_boundary_square() {
-        let solver = IterativeDeepeningSolver::new();
-        // Top Left Corner
-        assert_eq!(solver.find_boundary_square(0x00, Direction::North), 0x00);
-        assert_eq!(solver.find_boundary_square(0x00, Direction::South), 0xF0);
-        assert_eq!(solver.find_boundary_square(0x00, Direction::West), 0x00);
-        assert_eq!(solver.find_boundary_square(0x00, Direction::East), 0x0F);
-
-        // Top Right Corner
-        assert_eq!(solver.find_boundary_square(0x0F, Direction::North), 0x0F);
-        assert_eq!(solver.find_boundary_square(0x0F, Direction::South), 0xFF);
-        assert_eq!(solver.find_boundary_square(0x0F, Direction::West), 0x00);
-        assert_eq!(solver.find_boundary_square(0x0F, Direction::East), 0x0F);
-
-        // Bottom Left Corner
-        assert_eq!(solver.find_boundary_square(0xF0, Direction::North), 0x00);
-        assert_eq!(solver.find_boundary_square(0xF0, Direction::South), 0xF0);
-        assert_eq!(solver.find_boundary_square(0xF0, Direction::West), 0xF0);
-        assert_eq!(solver.find_boundary_square(0xF0, Direction::East), 0xFF);
-
-        // Bottom Right Corner
-        assert_eq!(solver.find_boundary_square(0xFF, Direction::North), 0x0F);
-        assert_eq!(solver.find_boundary_square(0xFF, Direction::South), 0xFF);
-        assert_eq!(solver.find_boundary_square(0xFF, Direction::West), 0xF0);
-        assert_eq!(solver.find_boundary_square(0xFF, Direction::East), 0xFF);
-
-        // Central Square
-        assert_eq!(solver.find_boundary_square(0xAA, Direction::North), 0x0A);
-        assert_eq!(solver.find_boundary_square(0xAA, Direction::South), 0xFA);
-        assert_eq!(solver.find_boundary_square(0xAA, Direction::West), 0xA0);
-        assert_eq!(solver.find_boundary_square(0xAA, Direction::East), 0xAF);
-    }
-
-    #[test]
-    fn find_boundary_square_east_wall() {
-        let mut squares = [SquareFlags::empty(); BOARD_SIZE];
-        squares[0x05].toggle(SquareFlags::WALL_EAST);
-        let solver = IterativeDeepeningSolver::with_values(squares, [0; BOT_COUNT], 0);
-        assert_eq!(solver.find_boundary_square(0x00, Direction::East), 0x05);
-    }
-
-    #[test]
-    fn find_boundary_square_west_wall() {
-        let mut squares = [SquareFlags::empty(); BOARD_SIZE];
-        squares[0x05].toggle(SquareFlags::WALL_WEST);
-        let solver = IterativeDeepeningSolver::with_values(squares, [0; BOT_COUNT], 0);
-        assert_eq!(solver.find_boundary_square(0x0F, Direction::West), 0x05);
-    }
-
-    #[test]
-    fn find_boundary_square_north_wall() {
-        let mut squares = [SquareFlags::empty(); BOARD_SIZE];
-        squares[0x50].toggle(SquareFlags::WALL_NORTH);
-        let solver = IterativeDeepeningSolver::with_values(squares, [0; BOT_COUNT], 0);
-        assert_eq!(solver.find_boundary_square(0xF0, Direction::North), 0x50);
-    }
-
-    #[test]
-    fn find_boundary_square_south_wall() {
-        let mut squares = [SquareFlags::empty(); BOARD_SIZE];
-        squares[0x50].toggle(SquareFlags::WALL_SOUTH);
-        let solver = IterativeDeepeningSolver::with_values(squares, [0; BOT_COUNT], 0);
-        assert_eq!(solver.find_boundary_square(0x00, Direction::South), 0x50);
-    }
-
-    #[test]
-    fn find_boundary_square_occupied() {
-        let squares = [SquareFlags::empty(); BOARD_SIZE];
-        let mut solver = IterativeDeepeningSolver::with_values(squares, [0; BOT_COUNT], 0);
-        solver.board[0xAA].toggle(SquareFlags::OCCUPIED);
-
-        assert_eq!(solver.find_boundary_square(0x0A, Direction::South), 0x9A);
-        assert_eq!(solver.find_boundary_square(0xFA, Direction::North), 0xBA);
-        assert_eq!(solver.find_boundary_square(0xA0, Direction::East), 0xA9);
-        assert_eq!(solver.find_boundary_square(0xAF, Direction::West), 0xAB);
-    }
-
-    #[test]
-    fn sort_bots_sorts_all_but_last_bot() {
-        let squares = [SquareFlags::empty(); BOARD_SIZE];
-        let mut solver = IterativeDeepeningSolver::with_values(squares, [0; util::BOT_COUNT], 0);
-        solver.bots = [3, 1, 2, 0];
-
-        solver.sort_bots();
-        assert_eq!(solver.bots, [3, 0, 1, 2]);
-    }
-
-    #[test]
-    fn board_with_values_initializes_correctly() {
-        let squares = [SquareFlags::empty(); BOARD_SIZE];
-        let solver = IterativeDeepeningSolver::with_values(squares, [3, 2, 1, 0], 0);
-
-        assert_eq!(solver.bots, [3, 0, 1, 2]);
-        for (i, &cost) in solver.min_costs.iter().enumerate() {
-            if i == 0 {
-                assert_eq!(cost, 0);
-            } else if i < util::BOARD_COLS || i % util::BOARD_COLS == 0 {
-                assert_eq!(cost, 1);
-            } else {
-                assert_eq!(cost, 2);
-            }
-        }
-        for bot in solver.bots {
-            assert!(solver.board[bot].contains(SquareFlags::OCCUPIED));
-        }
-    }
-
-    #[test]
-    fn move_bot_works_as_expected() {
-        let mut solver = IterativeDeepeningSolver::with_values([SquareFlags::empty(); util::BOARD_SIZE], [3, 2, 1, 0], 0);
-        assert_eq!(solver.bots, [3, 0, 1, 2]);
-        assert!(solver.board[0].contains(SquareFlags::OCCUPIED));
-        solver.move_bot(1, Direction::South);
-        assert_eq!(solver.bots, [3, 1, 2, 240]);
-        assert!(!solver.board[0].contains(SquareFlags::OCCUPIED));
-        assert!(solver.board[240].contains(SquareFlags::OCCUPIED));
-    }
-
-    #[test]
-    fn undo_move_works_as_expected() {
-        let mut solver = IterativeDeepeningSolver::with_values([SquareFlags::empty(); util::BOARD_SIZE], [3, 2, 1, 0], 0);
-        assert_eq!(solver.bots, [3, 0, 1, 2]);
-        assert!(solver.board[0].contains(SquareFlags::OCCUPIED));
-        let bot_move = solver.move_bot(1, Direction::South);
-        assert_eq!(solver.bots, [3, 1, 2, 240]);
-        assert!(!solver.board[0].contains(SquareFlags::OCCUPIED));
-        assert!(solver.board[240].contains(SquareFlags::OCCUPIED));
-        solver.undo_move(bot_move);
-        assert_eq!(solver.bots, [3, 0, 1, 2]);
-        assert!(!solver.board[240].contains(SquareFlags::OCCUPIED));
-        assert!(solver.board[0].contains(SquareFlags::OCCUPIED));
-    }
 
     #[test]
     fn solves_correctly() {
