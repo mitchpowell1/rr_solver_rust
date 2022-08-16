@@ -39,32 +39,23 @@ impl Direction {
 
 pub struct IterativeDeepeningSolver {
     min_costs: [u8; util::BOARD_SIZE],
-    target_square: usize,
+    target_square: u8,
     board: [SquareFlags; util::BOARD_SIZE],
-    bots: [usize; util::BOT_COUNT],
+    bots: [u8; util::BOT_COUNT],
 }
 
 /**
  * Associated constructors
  */
 impl IterativeDeepeningSolver {
-    pub fn new() -> IterativeDeepeningSolver {
-        IterativeDeepeningSolver {
-            min_costs: [0; util::BOARD_SIZE],
-            target_square: 0,
-            board: [SquareFlags::empty(); util::BOARD_SIZE],
-            bots: [0; util::BOT_COUNT],
-        }
-    }
-
     /**
      * The with_values constructor accepts a board, a list of bots, and a target_square.
      * It is assumed that the first bot in the list of bots is the one that needs to reach the target square
      */
     pub fn with_values(
         board: [SquareFlags; util::BOARD_SIZE],
-        bots: [usize; util::BOT_COUNT],
-        target_square: usize,
+        bots: [u8; util::BOT_COUNT],
+        target_square: u8,
     ) -> IterativeDeepeningSolver {
         let mut solver = IterativeDeepeningSolver {
             min_costs: [u8::MAX; util::BOARD_SIZE],
@@ -78,7 +69,7 @@ impl IterativeDeepeningSolver {
         solver.compute_min_moves();
         solver.sort_bots();
         for bot in solver.bots {
-            solver.board[bot].set(SquareFlags::OCCUPIED, true);
+            solver.board[bot as usize].set(SquareFlags::OCCUPIED, true);
         }
         solver
     }
@@ -88,7 +79,7 @@ impl IterativeDeepeningSolver {
  * Methods
  */
 impl IterativeDeepeningSolver {
-    fn find_boundary_square(&self, start_square: usize, direction: Direction) -> usize {
+    fn find_boundary_square(&self, start_square: u8, direction: Direction) -> u8 {
         let mut square = start_square as i32;
         let offset = direction.get_offset();
         let wall = direction.get_wall();
@@ -99,24 +90,24 @@ impl IterativeDeepeningSolver {
                 break;
             }
         }
-        square as usize
+        square as u8
     }
 
     fn compute_min_moves(&mut self) {
         use std::collections::VecDeque;
-        let mut visit_queue: VecDeque<(usize, u8)> = VecDeque::new();
+        let mut visit_queue: VecDeque<(u8, u8)> = VecDeque::new();
         let mut visited = [false; util::BOARD_SIZE];
         visit_queue.push_back((self.target_square, 0));
-        let queue_visit = |i: usize, moves: u8, visit_queue: &mut VecDeque<(usize, u8)>, visited: &mut [bool; util::BOARD_SIZE]| {
-            if !visited[i] {
+        let queue_visit = |i: u8, moves: u8, visit_queue: &mut VecDeque<(u8, u8)>, visited: &mut [bool; util::BOARD_SIZE]| {
+            if !visited[i as usize] {
                 visit_queue.push_back((i, moves + 1));
-                visited[i] = true;
+                visited[i as usize] = true;
             }
         };
         while let Some(node) = visit_queue.pop_front() {
             let (square, moves) = node;
-            self.min_costs[square] = moves;
-            visited[square] = true;
+            self.min_costs[square as usize] = moves;
+            visited[square as usize] = true;
             let northern_bound = self.find_boundary_square(square, Direction::North);
             let southern_bound = self.find_boundary_square(square, Direction::South);
             let eastern_bound = self.find_boundary_square(square, Direction::East);
@@ -124,13 +115,13 @@ impl IterativeDeepeningSolver {
 
             let mut i = square;
             while i > northern_bound {
-                i -= util::BOARD_COLS;
+                i -= util::BOARD_COLS as u8;
                 queue_visit(i, moves, &mut visit_queue, &mut visited);
             }
 
             i = square;
             while i < southern_bound {
-                i += util::BOARD_COLS;
+                i += util::BOARD_COLS as u8;
                 queue_visit(i, moves, &mut visit_queue, &mut visited);
             }
 
@@ -162,8 +153,8 @@ impl IterativeDeepeningSolver {
         }
     }
 
-    fn can_move (&self, bot: usize, direction: Direction) -> bool {
-        let square = self.board[bot];
+    fn can_move (&self, bot: u8, direction: Direction) -> bool {
+        let square = self.board[bot as usize];
         if square.contains(direction.get_wall()) {
             return false;
         }
@@ -175,12 +166,12 @@ impl IterativeDeepeningSolver {
         true
     }
 
-    fn move_bot(&mut self, index: usize, direction: Direction) -> (usize, usize) {
+    fn move_bot(&mut self, index: usize, direction: Direction) -> (u8, u8) {
         let original = self.bots[index];
         let boundary_square = self.find_boundary_square(self.bots[index], direction);
-        self.board[self.bots[index]].set(SquareFlags::OCCUPIED, false);
-        self.board[boundary_square].set(SquareFlags::OCCUPIED, true);
-        self.bots[index] = boundary_square;
+        self.board[self.bots[index] as usize ].set(SquareFlags::OCCUPIED, false);
+        self.board[boundary_square as usize].set(SquareFlags::OCCUPIED, true);
+        self.bots[index] = boundary_square as u8;
         if index != 0 {
             self.sort_bots();
         }
@@ -188,9 +179,10 @@ impl IterativeDeepeningSolver {
     }
 
     fn create_hash(&self) -> u32 {
-        let mut hash: u32 = 0;
+        let mut hash = 0;
         for i in 0..util::BOT_COUNT {
-            hash |= (self.bots[i] as u32) << (i * 8);
+            hash <<= 8;
+            hash |= self.bots[i] as u32;
         }
         hash
     }
@@ -199,22 +191,20 @@ impl IterativeDeepeningSolver {
         self.bots[0] == self.target_square
     }
 
-    fn undo_move(&mut self, bot_move: (usize, usize)) {
+    fn undo_move(&mut self, bot_move: (u8, u8)) {
         let (original, to_revert) = bot_move;
         let bot_index = self.bots.iter().position(|&x |{x == to_revert}).unwrap();
         self.bots[bot_index] = original;
-        self.board[to_revert].set(SquareFlags::OCCUPIED, false);
-        self.board[original].set(SquareFlags::OCCUPIED, true);
+        self.board[to_revert as usize].set(SquareFlags::OCCUPIED, false);
+        self.board[original as usize].set(SquareFlags::OCCUPIED, true);
         if bot_index != 0 {
             self.sort_bots();
         }
     }
 
-    pub fn solve(&mut self) -> Vec<(usize, usize)> {
-        let mut previous_states: FnvHashMap<u32, u8> = FnvHashMap::default();
+    pub fn solve(&mut self) -> Vec<(u8, u8)> {
 
-        let mut solution: Vec<(usize, usize)> = Vec::new();
-        fn helper(depth: u8, max_depth: u8, solver: &mut IterativeDeepeningSolver,  prev_states: &mut FnvHashMap<u32, u8>, solution: &mut Vec<(usize, usize)>) -> bool {
+        fn helper(depth: u8, max_depth: u8, solver: &mut IterativeDeepeningSolver,  prev_states: &mut FnvHashMap<u32, u8>, solution: &mut Vec<(u8, u8)>) -> bool {
             let clearance = max_depth - depth;
             prev_states.insert(solver.create_hash(), clearance);
             if solver.is_solved() {
@@ -234,25 +224,27 @@ impl IterativeDeepeningSolver {
                             continue;
                         }
                     }
-                    if depth + 1 + solver.min_costs[solver.bots[0]] > max_depth {
+                    if depth + 1 + solver.min_costs[solver.bots[0] as usize] > max_depth {
                         solver.undo_move(bot_move);
                         continue;
                     }
                     let res = helper(depth + 1, max_depth, solver, prev_states, solution);
+                    solver.undo_move(bot_move);
                     if res {
                         solution.push(bot_move);
-                        solver.undo_move(bot_move);
                         return true
                     }
-                    solver.undo_move(bot_move);
                 }
             }
             false
         }
-        let mut max_depth = self.min_costs[self.bots[0]];
-        let mut res = false;
-        while !res {
-            res = helper(0, max_depth, self, &mut previous_states, &mut solution);
+
+        let mut max_depth = self.min_costs[self.bots[0] as usize];
+        let mut previous_states: FnvHashMap<u32, u8> = FnvHashMap::default();
+
+        let mut solution: Vec<(u8, u8)> = Vec::new();
+
+        while !helper(0, max_depth, self, &mut previous_states, &mut solution) {
             max_depth += 1;
         }
         solution.reverse();
@@ -263,7 +255,6 @@ impl IterativeDeepeningSolver {
 #[cfg(test)]
 mod solver_tests {
     use super::*;
-
     #[test]
     fn solves_correctly() {
         let raw_board = [
