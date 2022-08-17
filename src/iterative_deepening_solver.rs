@@ -42,6 +42,7 @@ pub struct IterativeDeepeningSolver {
     target_square: u8,
     board: [SquareFlags; util::BOARD_SIZE],
     bots: [u8; util::BOT_COUNT],
+    hash: u32,
 }
 
 /**
@@ -59,6 +60,7 @@ impl IterativeDeepeningSolver {
     ) -> IterativeDeepeningSolver {
         let mut solver = IterativeDeepeningSolver {
             min_costs: [u8::MAX; util::BOARD_SIZE],
+            hash: 0,
             target_square,
             board,
             bots,
@@ -151,6 +153,7 @@ impl IterativeDeepeningSolver {
         if self.bots[1] > self.bots[2] {
             self.bots.swap(1, 2);
         }
+        self.update_hash();
     }
 
     fn can_move (&self, bot: u8, direction: Direction) -> bool {
@@ -176,12 +179,12 @@ impl IterativeDeepeningSolver {
         (original, boundary_square)
     }
 
-    fn create_hash(&self) -> u32 {
-        let mut hash = 0;
-        for i in 0..util::BOT_COUNT {
-            hash |= (self.bots[i] as u32) << i * 8;
-        }
-        hash
+    fn update_hash(&mut self) {
+        self.hash = 0;
+        self.bots
+            .iter()
+            .enumerate()
+            .for_each(|(i, bot)| self.hash |= (*bot as u32) << i * 8);
     }
 
     fn is_solved(&self) -> bool {
@@ -201,7 +204,7 @@ impl IterativeDeepeningSolver {
 
         fn helper(depth: u8, max_depth: u8, solver: &mut IterativeDeepeningSolver,  prev_states: &mut HashMap<u32, u8, RandomState>, solution: &mut Vec<(u8, u8)>) -> bool {
             let clearance = max_depth - depth;
-            prev_states.insert(solver.create_hash(), clearance);
+            prev_states.insert(solver.hash, clearance);
             if solver.is_solved() {
                 return true;
             }
@@ -212,8 +215,7 @@ impl IterativeDeepeningSolver {
                         continue;
                     }
                     let bot_move = solver.move_bot(bot_index, direction);
-                    let hash = solver.create_hash();
-                    if let Some(&x) = prev_states.get(&hash) {
+                    if let Some(&x) = prev_states.get(&solver.hash) {
                         if x >= clearance - 1 {
                             solver.undo_move(bot_move);
                             continue;

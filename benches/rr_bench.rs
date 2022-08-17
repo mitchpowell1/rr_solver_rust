@@ -2,7 +2,6 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use rr_solver::{IterativeDeepeningSolver, SquareFlags};
 
 pub fn criterion_benchmark(crit: &mut Criterion) {
-    let mut group = crit.benchmark_group("criterion_benchmark");
     let raw_board = [
         09, 01, 01, 01, 03, 09, 01, 01, 01, 03, 09, 01, 01, 01, 05, 03, 
         08, 00, 06, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 09, 02, 
@@ -23,13 +22,15 @@ pub fn criterion_benchmark(crit: &mut Criterion) {
     ].map(|v| SquareFlags::from_bits(v).unwrap());
     let bots: [u8; 4] = [191, 226, 48, 16];
     let target = 201;
-    group.sample_size(500);
-    group.bench_function("medium_test", |b| b.iter(||{
+    crit.bench_function("medium_test", |b| b.iter(||{
         let mut solver = IterativeDeepeningSolver::with_values(raw_board, bots, target);
         black_box(solver.solve());
     }));
-    group.finish();
 }
 
-criterion_group!(benches, criterion_benchmark);
+criterion_group!{
+    name = benches; 
+    config = Criterion::default().sample_size(500);
+    targets = criterion_benchmark
+}
 criterion_main!(benches);
