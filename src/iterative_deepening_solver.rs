@@ -1,10 +1,10 @@
 use crate::util;
 
+use std::collections::HashMap;
+use ahash::{RandomState};
+
 use util::SquareFlags;
 use util::BOARD_COLS;
-
-use fnv::FnvHashMap;
-
 
 #[derive(Copy, Clone, PartialEq)]
 enum Direction {
@@ -146,7 +146,7 @@ impl IterativeDeepeningSolver {
             self.bots.swap(1, 2);
         }
         if self.bots[2] > self.bots[3] {
-            self.bots.swap(2,3);
+            self.bots.swap(2, 3);
         }
         if self.bots[1] > self.bots[2] {
             self.bots.swap(1, 2);
@@ -172,17 +172,14 @@ impl IterativeDeepeningSolver {
         self.board[self.bots[index] as usize ].set(SquareFlags::OCCUPIED, false);
         self.board[boundary_square as usize].set(SquareFlags::OCCUPIED, true);
         self.bots[index] = boundary_square as u8;
-        if index != 0 {
-            self.sort_bots();
-        }
+        self.sort_bots();
         (original, boundary_square)
     }
 
     fn create_hash(&self) -> u32 {
         let mut hash = 0;
         for i in 0..util::BOT_COUNT {
-            hash <<= 8;
-            hash |= self.bots[i] as u32;
+            hash |= (self.bots[i] as u32) << i * 8;
         }
         hash
     }
@@ -193,18 +190,16 @@ impl IterativeDeepeningSolver {
 
     fn undo_move(&mut self, bot_move: (u8, u8)) {
         let (original, to_revert) = bot_move;
-        let bot_index = self.bots.iter().position(|&x |{x == to_revert}).unwrap();
+        let bot_index = self.bots.iter().position(|&x| x == to_revert).unwrap();
         self.bots[bot_index] = original;
         self.board[to_revert as usize].set(SquareFlags::OCCUPIED, false);
         self.board[original as usize].set(SquareFlags::OCCUPIED, true);
-        if bot_index != 0 {
-            self.sort_bots();
-        }
+        self.sort_bots();
     }
 
     pub fn solve(&mut self) -> Vec<(u8, u8)> {
 
-        fn helper(depth: u8, max_depth: u8, solver: &mut IterativeDeepeningSolver,  prev_states: &mut FnvHashMap<u32, u8>, solution: &mut Vec<(u8, u8)>) -> bool {
+        fn helper(depth: u8, max_depth: u8, solver: &mut IterativeDeepeningSolver,  prev_states: &mut HashMap<u32, u8, RandomState>, solution: &mut Vec<(u8, u8)>) -> bool {
             let clearance = max_depth - depth;
             prev_states.insert(solver.create_hash(), clearance);
             if solver.is_solved() {
@@ -240,7 +235,7 @@ impl IterativeDeepeningSolver {
         }
 
         let mut max_depth = self.min_costs[self.bots[0] as usize];
-        let mut previous_states: FnvHashMap<u32, u8> = FnvHashMap::default();
+        let mut previous_states: HashMap<u32, u8, RandomState> = HashMap::default();
 
         let mut solution: Vec<(u8, u8)> = Vec::new();
 
@@ -278,10 +273,9 @@ mod solver_tests {
         let board = raw_board.map(|x|{ return SquareFlags::from_bits(x).unwrap() });
         // 25 move bot position: [43, 226, 48, 18]
         // Changed to make running the test tractable
-        // let mut solver = IterativeDeepeningSolver::with_values(board,[191, 226, 177, 64], 201);
-        let mut solver = IterativeDeepeningSolver::with_values(board,[43, 226, 48, 18], 201);
+        let mut solver = IterativeDeepeningSolver::with_values(board,[191, 226, 177, 64], 201);
         let solution = solver.solve();
-        //assert_eq!(solution.len(), 10);
+        assert_eq!(solution.len(), 10);
         assert_eq!(solution.last().unwrap().1, 201);
     }
 }

@@ -5,7 +5,6 @@ pub use iterative_deepening_solver::IterativeDeepeningSolver;
 pub use util::SquareFlags;
 use wasm_bindgen::prelude::*;
 
-
 #[wasm_bindgen]
 pub fn solve(board: js_sys::Array, bots: js_sys::Array, target: u8) -> js_sys::Array {
     let mut game_board: [util::SquareFlags; util::BOARD_SIZE] = [util::SquareFlags::empty(); util::BOARD_SIZE];
