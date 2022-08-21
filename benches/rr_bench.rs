@@ -30,7 +30,7 @@ pub fn criterion_benchmark(crit: &mut Criterion) {
 
 criterion_group!{
     name = benches; 
-    config = Criterion::default().sample_size(500);
+    config = Criterion::default().sample_size(100).significance_level(0.001);
     targets = criterion_benchmark
 }
 criterion_main!(benches);
