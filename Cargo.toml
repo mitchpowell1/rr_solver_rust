@@ -14,6 +14,7 @@ wasm-bindgen = "0.2"
 js-sys = "0.3.59"
 ahash = "0.8.0"
 getrandom = { features = ["js"] }
+static_assertions = "1.1.0"
 
 [dev-dependencies]
 criterion = "0.3.6"
