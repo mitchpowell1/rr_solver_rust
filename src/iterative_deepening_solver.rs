@@ -100,52 +100,33 @@ impl IterativeDeepeningSolver {
         let mut visit_queue: VecDeque<(u8, u8)> = VecDeque::new();
         let mut visited = [false; util::BOARD_SIZE];
         visit_queue.push_back((self.target_square, 0));
-        let queue_visit = |i: u8, moves: u8, visit_queue: &mut VecDeque<(u8, u8)>, visited: &mut [bool; util::BOARD_SIZE]| {
-            if !visited[i as usize] {
-                visit_queue.push_back((i, moves + 1));
-                visited[i as usize] = true;
-            }
-        };
         while let Some(node) = visit_queue.pop_front() {
             let (square, moves) = node;
             self.min_costs[square as usize] = moves;
             visited[square as usize] = true;
-            let northern_bound = self.find_boundary_square(square, Direction::North);
-            let southern_bound = self.find_boundary_square(square, Direction::South);
-            let eastern_bound = self.find_boundary_square(square, Direction::East);
-            let western_bound = self.find_boundary_square(square, Direction::West);
 
-            let mut i = square;
-            while i > northern_bound {
-                i -= util::BOARD_COLS as u8;
-                queue_visit(i, moves, &mut visit_queue, &mut visited);
+            for direction in Direction::VALUES {
+                let mut s = square as i32;
+                let offset = direction.get_offset();
+                let wall = direction.get_wall();
+                loop {
+                    if !visited[s as usize] {
+                        visit_queue.push_back((s as u8, moves + 1));
+                        visited[s as usize] = true;
+                    }
+                    if self.board[s as usize].contains(wall) {
+                        break;
+                    }
+                    s += offset;
+                }
             }
-
-            i = square;
-            while i < southern_bound {
-                i += util::BOARD_COLS as u8;
-                queue_visit(i, moves, &mut visit_queue, &mut visited);
-            }
-
-            i = square;
-            while i < eastern_bound {
-                i += 1;
-                queue_visit(i, moves, &mut visit_queue, &mut visited);
-            }
-
-            i = square;
-            while i > western_bound {
-                i -= 1;
-                queue_visit(i, moves, &mut visit_queue, &mut visited);
-            }
-
         }
     }
 
     fn sort_bots(&mut self) {
         // Bot sorting function will not work properly if there are not exactly 4 bots
         static_assertions::const_assert_eq!(util::BOT_COUNT, 4);
-        // Sort all but the first bot, which is the target bot and is exempt from the ordering rules
+        // Sort all but the first bot, which is the target bot and is exempt from the ordering rules (this is required in order to make the position hashing scheme work)
         if self.bots[1] > self.bots[2] {
             self.bots.swap(1, 2);
         }
@@ -182,13 +163,10 @@ impl IterativeDeepeningSolver {
     }
 
     fn update_hash(&mut self) {
-        // Hash update function will not work properly with more than 4 bots (should work ok with fewer)
-        static_assertions::const_assert_eq!(util::BOT_COUNT, 4);
-        self.hash = 0;
-        self.bots
+        self.hash = self.bots
             .iter()
             .enumerate()
-            .for_each(|(i, bot)| self.hash |= (*bot as u32) << (i * 8));
+            .fold(0, |hash, (i, &bot)| { hash | (bot as u32) << i * 8 });
     }
 
     fn is_solved(&self) -> bool {
